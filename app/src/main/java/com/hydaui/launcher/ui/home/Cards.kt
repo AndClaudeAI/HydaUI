@@ -58,6 +58,7 @@ import com.hydaui.launcher.data.CalendarState
 import com.hydaui.launcher.ui.components.GlassTone
 import com.hydaui.launcher.ui.components.glass
 import com.hydaui.launcher.ui.theme.Hyda
+import com.hydaui.launcher.ui.theme.TextLook
 import java.util.Calendar
 import java.util.Date
 
@@ -75,7 +76,7 @@ fun Greeting(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
                 Text("there", style = MaterialTheme.typography.headlineMedium)
             }
         }
-        Text("Your summary for today", style = MaterialTheme.typography.headlineSmall, color = Hyda.InkFaint)
+        Text(TextLook.greetingSubtitle, style = MaterialTheme.typography.headlineSmall, color = Hyda.InkFaint)
     }
 }
 
@@ -383,7 +384,7 @@ fun AssistantPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f), Color.Transparent)), radius = size.minDimension * 0.42f)
         }
         Spacer(Modifier.width(10.dp))
-        Text("How can I help?", style = MaterialTheme.typography.labelLarge)
+        Text(TextLook.assistantPrompt, style = MaterialTheme.typography.labelLarge)
     }
 }
 

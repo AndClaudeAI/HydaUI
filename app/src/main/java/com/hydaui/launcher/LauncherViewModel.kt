@@ -10,6 +10,8 @@ import com.hydaui.launcher.data.CalendarRepository
 import com.hydaui.launcher.data.CalendarState
 import com.hydaui.launcher.data.DeviceRepository
 import com.hydaui.launcher.data.Prefs
+import com.hydaui.launcher.data.UpdateState
+import com.hydaui.launcher.data.Updater
 import com.hydaui.launcher.data.WeatherRepository
 import com.hydaui.launcher.data.WeatherState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     val prefs = Prefs(app)
     private val calendarRepository = CalendarRepository(app)
     private val weatherRepository = WeatherRepository(app)
+    val updater = Updater(app)
 
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
@@ -49,6 +52,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private var weatherFetchedAt = 0L
 
     init {
+        updater.noteLaunch()
         viewModelScope.launch {
             appRepository.changes()
                 .onStart { emit(Unit) }
@@ -63,6 +67,14 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         _isDefaultLauncher.value = device.isDefaultLauncher()
         refreshCalendar()
         refreshWeather(force = false)
+        // Coming back from "Install unknown apps" with permission granted: try again right away.
+        val waitingOnPermission = updater.state.value is UpdateState.NeedsPermission &&
+            getApplication<Application>().packageManager.canRequestPackageInstalls()
+        viewModelScope.launch { updater.checkForUpdate(force = waitingOnPermission) }
+    }
+
+    fun checkForUpdatesNow() {
+        viewModelScope.launch { updater.checkForUpdate(force = true) }
     }
 
     fun refreshCalendar() {

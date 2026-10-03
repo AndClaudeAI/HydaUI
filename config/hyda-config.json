@@ -1,0 +1,43 @@
+{
+  "colors": {
+    "ink": "#14161B",
+    "inkSoft": "#5E6472",
+    "inkFaint": "#9097A6",
+    "accent": "#1F7BFF",
+    "ember": "#FF6B3D",
+    "lilac": "#B58CFF",
+    "ice": "#6FE3FF"
+  },
+  "aurora": {
+    "top": "#EDF0F6",
+    "middle": "#E1E6EF",
+    "bottom": "#D0D7E6",
+    "glowA": "#FAFBFD",
+    "glowB": "#B7C3E8",
+    "glowC": "#F8D7C2",
+    "glowD": "#D9C9F4",
+    "prism": 0.11,
+    "driftSeconds": 26
+  },
+  "glass": {
+    "frostTop": 0.62,
+    "frostBottom": 0.32,
+    "milkTop": 0.96,
+    "milkBottom": 0.84
+  },
+  "motion": {
+    "drawerDamping": 0.88,
+    "drawerStiffness": 320,
+    "drawerTravel": 0.42,
+    "homeBlurDp": 22,
+    "pressScale": 0.95
+  },
+  "text": {
+    "greetingSubtitle": "Your summary for today",
+    "assistantPrompt": "How can I help?"
+  },
+  "widgets": {
+    "battery": true,
+    "alarm": true
+  }
+}

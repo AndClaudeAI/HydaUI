@@ -17,6 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdate
+import com.hydaui.launcher.BuildConfig
+import com.hydaui.launcher.data.UpdateState
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +53,9 @@ fun SettingsSheet(
     name: String,
     useSystemWallpaper: Boolean,
     isDefaultLauncher: Boolean,
+    update: UpdateState,
+    updatesEnabled: Boolean,
+    onCheckForUpdates: () -> Unit,
     onEditName: () -> Unit,
     onUseSystemWallpaperChange: (Boolean) -> Unit,
     onPickWallpaper: () -> Unit,
@@ -88,6 +94,20 @@ fun SettingsSheet(
                     "Default home app",
                     if (isDefaultLauncher) "HydaUI is your home screen" else "Tap to make HydaUI your home screen",
                     onClick = onSetDefault,
+                )
+                SettingRow(
+                    Icons.Rounded.SystemUpdate,
+                    "Updates · ${BuildConfig.VERSION_NAME}",
+                    when {
+                        !updatesEnabled -> "Preview build — updates are off"
+                        update is UpdateState.UpToDate -> "Up to date · tap to check again"
+                        update is UpdateState.NeedsPermission -> "${update.versionName} waiting for install permission"
+                        update is UpdateState.Downloading -> "Downloading ${update.versionName}…"
+                        update is UpdateState.Installing -> "Installing ${update.versionName}…"
+                        update is UpdateState.Failed -> "Couldn't check: ${update.reason}"
+                        else -> "Tap to check now"
+                    },
+                    onClick = onCheckForUpdates,
                 )
                 SettingRow(Icons.Rounded.Settings, "System settings", null, onClick = onSystemSettings)
             }

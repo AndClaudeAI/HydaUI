@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.hydaui.launcher.ui.theme.GlassLook
 
 /** How much light a pane of glass lets through. */
 enum class GlassTone {
@@ -33,8 +34,8 @@ fun Modifier.glass(
     elevation: Dp = 10.dp,
 ): Modifier {
     val (top, bottom) = when (tone) {
-        GlassTone.Frost -> Color.White.copy(alpha = 0.62f) to Color.White.copy(alpha = 0.32f)
-        GlassTone.Milk -> Color.White.copy(alpha = 0.96f) to Color.White.copy(alpha = 0.84f)
+        GlassTone.Frost -> Color.White.copy(alpha = GlassLook.frostTop) to Color.White.copy(alpha = GlassLook.frostBottom)
+        GlassTone.Milk -> Color.White.copy(alpha = GlassLook.milkTop) to Color.White.copy(alpha = GlassLook.milkBottom)
         GlassTone.Smoke -> Color(0xFFC3C9D5).copy(alpha = 0.85f) to Color(0xFF9CA5B8).copy(alpha = 0.78f)
     }
     val rim = Brush.verticalGradient(

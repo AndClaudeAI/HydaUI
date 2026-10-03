@@ -6,21 +6,29 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** The HydaUI palette: pale frost, soft ink, one blue for action and one ember for life. */
+/**
+ * The HydaUI palette: pale frost, soft ink, one blue for action and one ember for life.
+ *
+ * Every value is snapshot state, so a new look-and-feel config (see [Look]) repaints the
+ * launcher in place — no reinstall, no restart.
+ */
 object Hyda {
-    val Ink = Color(0xFF14161B)
-    val InkSoft = Color(0xFF5E6472)
-    val InkFaint = Color(0xFF9097A6)
-    val Accent = Color(0xFF1F7BFF)
-    val Ember = Color(0xFFFF6B3D)
-    val Lilac = Color(0xFFB58CFF)
-    val Ice = Color(0xFF6FE3FF)
+    var Ink by mutableStateOf(Color(0xFF14161B))
+    var InkSoft by mutableStateOf(Color(0xFF5E6472))
+    var InkFaint by mutableStateOf(Color(0xFF9097A6))
+    var Accent by mutableStateOf(Color(0xFF1F7BFF))
+    var Ember by mutableStateOf(Color(0xFFFF6B3D))
+    var Lilac by mutableStateOf(Color(0xFFB58CFF))
+    var Ice by mutableStateOf(Color(0xFF6FE3FF))
     val Mist = Color(0xFFF4F6FA)
 }
 

@@ -1,0 +1,155 @@
+name: Build & preview
+
+# Every push builds HydaUI, records a preview on an emulator and publishes both as a
+# *prerelease* named build-<n>. Phones ignore prereleases; nothing reaches a device until the
+# build is approved with the "Approve build" workflow (promote.yml).
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.key.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore update signing key
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.HYDA_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hyda.keystore"
+            echo "HYDA_KEYSTORE=$RUNNER_TEMP/hyda.keystore" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::HYDA_KEYSTORE_BASE64 secret is not set: this preview won't include an installable update."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'build-*' 2>/dev/null || true)
+          if [ -n "$prev" ]; then range="$prev..HEAD"; else range="-10"; fi
+          git log --no-merges --format='- %s' $range > "$RUNNER_TEMP/notes.md"
+          echo "HYDA_NOTES_FILE=$RUNNER_TEMP/notes.md" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Build
+        env:
+          HYDA_KEYSTORE_PASSWORD: ${{ secrets.HYDA_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleDebug writeUpdateManifest --stacktrace
+
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/HydaUI-preview-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk out/HydaUI.apk
+          cp app/build/update/update.json out/update.json
+          cp app/build/generated/hydaConfig/hyda-config.json out/hyda-config.json
+          cp "$RUNNER_TEMP/notes.md" out/notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: out/
+
+  preview:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: out
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Record on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: ./scripts/record-preview.sh out/HydaUI-preview-debug.apk preview
+
+      - name: Compress video
+        run: |
+          if [ -f preview/preview-raw.mp4 ]; then
+            ffmpeg -loglevel error -y -i preview/preview-raw.mp4 \
+              -vf "scale=540:-2,fps=30" -c:v libx264 -preset slow -crf 27 -pix_fmt yuv420p -movflags +faststart \
+              preview/preview.mp4
+            rm preview/preview-raw.mp4
+          fi
+          ls -la preview
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview
+          path: preview/
+
+  publish:
+    needs: [build, preview]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+
+      - name: Assemble release files
+        run: |
+          mkdir -p files
+          cp dl/preview/* files/ 2>/dev/null || true
+          cp dl/build/hyda-config.json files/
+          if [ "${{ needs.build.outputs.signed }}" = "true" ]; then
+            cp dl/build/HydaUI.apk dl/build/update.json files/
+          fi
+          {
+            echo "**Preview of build ${{ github.run_number }}** · \`${GITHUB_SHA::7}\` on \`${GITHUB_REF_NAME}\`"
+            echo
+            echo "Not on any phone yet. Approve it with the *Approve build* workflow to roll it out."
+            echo
+            echo "### Changes"
+            cat dl/build/notes.md
+          } > body.md
+          ls -la files
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Preview · build ${{ github.run_number }}
+          body_path: body.md
+          prerelease: true
+          make_latest: false
+          files: files/*

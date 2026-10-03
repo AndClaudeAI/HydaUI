@@ -9,4 +9,3 @@ captures/
 .cxx/
 *.keystore
 !debug.keystore
-!app/hydaui-sideload.keystore

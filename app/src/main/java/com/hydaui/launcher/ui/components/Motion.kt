@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import com.hydaui.launcher.ui.theme.MotionLook
 
 /**
  * Click handling that answers the press with the glass itself: it sinks a little under the
@@ -21,7 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.pressable(
     onLongClick: (() -> Unit)? = null,
-    pressedScale: Float = 0.95f,
+    pressedScale: Float = MotionLook.pressScale,
     onClick: () -> Unit,
 ): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }

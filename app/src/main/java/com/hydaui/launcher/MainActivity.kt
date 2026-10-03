@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.hydaui.launcher.data.Prefs
+import com.hydaui.launcher.data.Updater
 import com.hydaui.launcher.ui.LauncherRoot
 import com.hydaui.launcher.ui.theme.HydaTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,6 +19,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Paint the newest look from the very first frame.
+        Updater(this).loadLook()
+        // Lets the CI preview recorder fill in a name for screenshots.
+        if (BuildConfig.DEBUG) intent?.getStringExtra("demo_name")?.let { Prefs(this).setName(it) }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),

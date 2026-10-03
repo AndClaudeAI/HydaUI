@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.hydaui.launcher.ui.theme.MotionLook
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
@@ -25,8 +26,11 @@ import kotlinx.coroutines.launch
 class DrawerState internal constructor(private val scope: CoroutineScope) {
     private val value = Animatable(0f)
 
+    /** Height of the screen the drawer lives in; set from layout. */
+    var heightPx by mutableFloatStateOf(1f)
+
     /** Finger distance that takes the drawer from closed to open. */
-    var travelPx by mutableFloatStateOf(1f)
+    val travelPx: Float get() = (heightPx * MotionLook.drawerTravel).coerceAtLeast(1f)
 
     /** Where the drawer is right now. May overshoot [0, 1] slightly on a spring; clamp when drawing. */
     val progress: Float get() = value.value
@@ -68,7 +72,7 @@ class DrawerState internal constructor(private val scope: CoroutineScope) {
         scope.launch {
             value.animateTo(
                 targetValue = if (open) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.88f, stiffness = 320f),
+                animationSpec = spring(dampingRatio = MotionLook.drawerDamping, stiffness = MotionLook.drawerStiffness),
                 initialVelocity = velocity,
             )
         }

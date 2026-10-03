@@ -36,10 +36,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import com.hydaui.launcher.ui.DrawerState
+import com.hydaui.launcher.ui.theme.WidgetLook
 import androidx.compose.ui.unit.dp
 import com.hydaui.launcher.data.BatteryState
 import com.hydaui.launcher.data.CalendarEvent
 import com.hydaui.launcher.data.CalendarState
+import com.hydaui.launcher.data.UpdateState
+import com.hydaui.launcher.data.WhatsNew
 import com.hydaui.launcher.data.WeatherState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,6 +55,8 @@ data class HomeState(
     val battery: BatteryState,
     val nextAlarm: Long?,
     val isDefaultLauncher: Boolean,
+    val update: UpdateState = UpdateState.Idle,
+    val whatsNew: WhatsNew? = null,
 )
 
 interface HomeActions {
@@ -69,6 +74,8 @@ interface HomeActions {
     fun phone()
     fun messages()
     fun camera()
+    fun allowInstalls()
+    fun dismissWhatsNew()
 }
 
 @Composable
@@ -173,6 +180,12 @@ fun HomeScreen(state: HomeState, actions: HomeActions, drawer: DrawerState, modi
                 Spacer(Modifier.height(30.dp))
                 Greeting(state.name, onClick = { currentActions.editName() })
                 Spacer(Modifier.height(22.dp))
+                UpdateBanner(
+                    update = state.update,
+                    whatsNew = state.whatsNew,
+                    onAllowInstalls = { currentActions.allowInstalls() },
+                    onDismissWhatsNew = { currentActions.dismissWhatsNew() },
+                )
                 if (!state.isDefaultLauncher) {
                     DefaultLauncherBanner(onSetDefault = { currentActions.setDefaultLauncher() })
                     Spacer(Modifier.height(16.dp))
@@ -190,10 +203,14 @@ fun HomeScreen(state: HomeState, actions: HomeActions, drawer: DrawerState, modi
                     onOpenCalendar = { currentActions.openCalendar() },
                 )
                 Spacer(Modifier.height(14.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    BatteryTile(state.battery)
-                    Spacer(Modifier.width(14.dp))
-                    AlarmTile(state.nextAlarm, now, onClick = { currentActions.openAlarms() }, modifier = Modifier.weight(1f))
+                if (WidgetLook.battery || WidgetLook.alarm) {
+                    Row(Modifier.fillMaxWidth()) {
+                        if (WidgetLook.battery) BatteryTile(state.battery)
+                        if (WidgetLook.battery && WidgetLook.alarm) Spacer(Modifier.width(14.dp))
+                        if (WidgetLook.alarm) {
+                            AlarmTile(state.nextAlarm, now, onClick = { currentActions.openAlarms() }, modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
                 Spacer(Modifier.height(20.dp))
             }

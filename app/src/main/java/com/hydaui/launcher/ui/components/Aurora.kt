@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.hydaui.launcher.ui.theme.AuroraLook
 
 /**
  * The default wallpaper: a cool pearl gradient with slowly drifting pastel light
@@ -26,7 +27,7 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
     val driftState = rememberInfiniteTransition(label = "aurora").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(26_000, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(AuroraLook.driftSeconds * 1_000, easing = LinearEasing), RepeatMode.Reverse),
         label = "drift",
     )
     Canvas(modifier.fillMaxSize()) {
@@ -35,16 +36,16 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
         val h = size.height
         drawRect(
             Brush.verticalGradient(
-                listOf(Color(0xFFEDF0F6), Color(0xFFE1E6EF), Color(0xFFD0D7E6)),
+                listOf(AuroraLook.top, AuroraLook.middle, AuroraLook.bottom),
             ),
         )
-        glow(Offset(w * (0.10f + 0.12f * drift), h * 0.10f), w * 0.95f, Color(0xFFFAFBFD), 0.95f)
-        glow(Offset(w * 1.00f, h * (0.30f + 0.08f * drift)), w * 0.80f, Color(0xFFB7C3E8), 0.70f)
-        glow(Offset(w * (0.05f + 0.08f * drift), h * 0.88f), w * 0.90f, Color(0xFFF8D7C2), 0.60f)
-        glow(Offset(w * 0.95f, h * (0.98f - 0.06f * drift)), w * 0.75f, Color(0xFFD9C9F4), 0.55f)
+        glow(Offset(w * (0.10f + 0.12f * drift), h * 0.10f), w * 0.95f, AuroraLook.glowA, 0.95f)
+        glow(Offset(w * 1.00f, h * (0.30f + 0.08f * drift)), w * 0.80f, AuroraLook.glowB, 0.70f)
+        glow(Offset(w * (0.05f + 0.08f * drift), h * 0.88f), w * 0.90f, AuroraLook.glowC, 0.60f)
+        glow(Offset(w * 0.95f, h * (0.98f - 0.06f * drift)), w * 0.75f, AuroraLook.glowD, 0.55f)
 
         // The prismatic streak, laid diagonally across the upper third.
-        val a = 0.11f
+        val a = AuroraLook.prism
         drawRect(
             Brush.linearGradient(
                 0.00f to Color.Transparent,

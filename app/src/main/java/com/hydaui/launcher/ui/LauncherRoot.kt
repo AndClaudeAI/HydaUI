@@ -9,6 +9,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Build
 import android.provider.AlarmClock
 import android.provider.CalendarContract
@@ -66,6 +67,7 @@ import com.hydaui.launcher.ui.home.HomeScreen
 import com.hydaui.launcher.ui.home.HomeState
 import com.hydaui.launcher.ui.settings.NameDialog
 import com.hydaui.launcher.ui.settings.SettingsSheet
+import com.hydaui.launcher.ui.theme.MotionLook
 import kotlinx.coroutines.flow.Flow
 
 @Composable
@@ -83,6 +85,8 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
     val battery by vm.battery.collectAsStateWithLifecycle()
     val nextAlarm by vm.nextAlarm.collectAsStateWithLifecycle()
     val isDefault by vm.isDefaultLauncher.collectAsStateWithLifecycle()
+    val update by vm.updater.state.collectAsStateWithLifecycle()
+    val whatsNew by vm.updater.whatsNew.collectAsStateWithLifecycle()
 
     val drawer = rememberDrawerState()
     val gridState = rememberLazyGridState()
@@ -232,12 +236,17 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
         )
 
         override fun camera() = context.safeStart(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+        override fun allowInstalls() = context.safeStart(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")),
+        )
+
+        override fun dismissWhatsNew() = vm.updater.dismissWhatsNew()
     }
 
     Box(
         Modifier
             .fillMaxSize()
-            .onSizeChanged { drawer.travelPx = it.height * 0.42f },
+            .onSizeChanged { drawer.heightPx = it.height.toFloat() },
     ) {
         if (useSystemWallpaper) {
             // A whisper of frost so dark wallpapers still read under the glass.
@@ -254,6 +263,8 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
                 battery = battery,
                 nextAlarm = nextAlarm,
                 isDefaultLauncher = isDefault,
+                update = update,
+                whatsNew = whatsNew,
             ),
             actions = actions,
             drawer = drawer,
@@ -267,7 +278,7 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
                 scaleY = scale
                 alpha = (1f - 0.75f * p) * (0.4f + 0.6f * e)
                 translationY = -24.dp.toPx() * p
-                val blur = 22.dp.toPx() * p
+                val blur = MotionLook.homeBlurDp.dp.toPx() * p
                 renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
             },
         )
@@ -306,6 +317,9 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
             name = name,
             useSystemWallpaper = useSystemWallpaper,
             isDefaultLauncher = isDefault,
+            update = update,
+            updatesEnabled = vm.updater.enabled,
+            onCheckForUpdates = vm::checkForUpdatesNow,
             onEditName = { nameDialogOpen = true },
             onUseSystemWallpaperChange = vm.prefs::setUseSystemWallpaper,
             onPickWallpaper = {
