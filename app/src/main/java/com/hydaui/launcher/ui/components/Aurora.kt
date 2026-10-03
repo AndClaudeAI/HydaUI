@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -22,13 +21,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
  */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
-    val drift by rememberInfiniteTransition(label = "aurora").animateFloat(
+    // Kept as State and read only inside the draw block: the background repaints as it drifts
+    // but never recomposes.
+    val driftState = rememberInfiniteTransition(label = "aurora").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(26_000, easing = LinearEasing), RepeatMode.Reverse),
         label = "drift",
     )
     Canvas(modifier.fillMaxSize()) {
+        val drift = driftState.value
         val w = size.width
         val h = size.height
         drawRect(

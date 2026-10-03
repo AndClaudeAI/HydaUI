@@ -34,6 +34,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import com.hydaui.launcher.ui.DrawerState
 import androidx.compose.ui.unit.dp
 import com.hydaui.launcher.data.BatteryState
 import com.hydaui.launcher.data.CalendarEvent
@@ -70,29 +72,45 @@ interface HomeActions {
 }
 
 @Composable
-fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modifier) {
-    val now by rememberNow()
+fun HomeScreen(state: HomeState, actions: HomeActions, drawer: DrawerState, modifier: Modifier = Modifier) {
+    val now by rememberMinute()
     val currentActions by rememberUpdatedState(actions)
-    val thresholdPx = with(LocalDensity.current) { 90.dp.toPx() }
+    val shadeThresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
 
-    // Swipes that start on the scrolling widget area arrive here as overscroll.
-    val overscroll = remember(thresholdPx) {
+    // Drags that start on the scrolling widgets reach us as nested scroll: once the widgets can't
+    // scroll any further up, the rest of the finger's travel pulls the drawer up with it.
+    val nested = remember(drawer, shadeThresholdPx) {
         object : NestedScrollConnection {
-            var pulled = 0f
+            var shadePull = 0f
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Mid-pull, the drawer owns the gesture in both directions.
+                if (source != NestedScrollSource.Drag || drawer.progress <= 0f) return Offset.Zero
+                drawer.dragBy(-available.y)
+                return Offset(0f, available.y)
+            }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.Drag) return Offset.Zero
-                pulled += available.y
-                when {
-                    pulled < -thresholdPx -> { pulled = 0f; currentActions.openDrawer(false) }
-                    pulled > thresholdPx -> { pulled = 0f; currentActions.expandNotifications() }
+                if (available.y < 0f) {
+                    drawer.dragBy(-available.y)
+                    return Offset(0f, available.y)
+                }
+                if (available.y > 0f && drawer.progress <= 0f) {
+                    shadePull += available.y
+                    if (shadePull > shadeThresholdPx) {
+                        shadePull = Float.NEGATIVE_INFINITY // once per gesture
+                        currentActions.expandNotifications()
+                    }
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                pulled = 0f
-                return Velocity.Zero
+                shadePull = 0f
+                if (drawer.progress <= 0f && !drawer.isOpen) return Velocity.Zero
+                drawer.settle(-available.y)
+                return available
             }
         }
     }
@@ -100,19 +118,32 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
     Box(
         modifier
             .fillMaxSize()
-            .nestedScroll(overscroll)
-            .pointerInput(Unit) {
-                var total = 0f
+            .nestedScroll(nested)
+            .pointerInput(drawer) {
+                // Drags on the bare background and the dock: the drawer rides the finger 1:1.
+                val tracker = VelocityTracker()
+                var travelled = 0f
+                var steeringDrawer = false
                 detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
+                    onDragStart = {
+                        tracker.resetTracking()
+                        travelled = 0f
+                        steeringDrawer = false
+                    },
                     onDragEnd = {
-                        when {
-                            total < -thresholdPx -> currentActions.openDrawer(false)
-                            total > thresholdPx -> currentActions.expandNotifications()
+                        if (steeringDrawer) {
+                            drawer.settle(-tracker.calculateVelocity().y)
+                        } else if (travelled > shadeThresholdPx) {
+                            currentActions.expandNotifications()
                         }
                     },
+                    onDragCancel = { if (steeringDrawer) drawer.settle(0f) },
                 ) { change, dy ->
-                    total += dy
+                    travelled += dy
+                    // Track our own running total, not positions in this (scaling) layer.
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                    if (!steeringDrawer && (dy < 0f || drawer.progress > 0f)) steeringDrawer = true
+                    if (steeringDrawer) drawer.dragBy(-dy)
                     change.consume()
                 }
             }
@@ -135,7 +166,7 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
             ) {
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    AnalogClock(now, Modifier.pointerInput(Unit) { detectTapGestures { currentActions.openClock() } })
+                    AnalogClock(onClick = { currentActions.openClock() })
                     Spacer(Modifier.weight(1f))
                     WeatherTile(state.weather, onClick = { currentActions.weatherTapped() })
                 }

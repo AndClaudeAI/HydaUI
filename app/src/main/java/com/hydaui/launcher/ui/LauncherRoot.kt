@@ -18,7 +18,17 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -63,6 +73,7 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
     val context = LocalContext.current
     val view = LocalView.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
 
     val apps by vm.apps.collectAsStateWithLifecycle()
     val name by vm.prefs.name.collectAsStateWithLifecycle()
@@ -73,28 +84,68 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
     val nextAlarm by vm.nextAlarm.collectAsStateWithLifecycle()
     val isDefault by vm.isDefaultLauncher.collectAsStateWithLifecycle()
 
-    var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    val drawer = rememberDrawerState()
+    val gridState = rememberLazyGridState()
+    val focusManager = LocalFocusManager.current
+    var wantsSearch by remember { mutableStateOf(false) }
     var focusSearch by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var settingsOpen by remember { mutableStateOf(false) }
     var nameDialogOpen by remember { mutableStateOf(false) }
 
-    fun closeDrawer() {
-        keyboard?.hide()
-        drawerOpen = false
-        focusSearch = false
-        query = ""
-    }
+    // Zooms the home screen in from slightly behind the glass whenever you come back to it.
+    val homeEntrance = remember { Animatable(1f) }
+    var cameBack by remember { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        // An app now covers us: tidy the drawer away instantly instead of animating it out
+        // underneath the app's own opening animation.
+        drawer.snapClosed()
+        cameBack = true
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        if (cameBack) {
+            cameBack = false
+            scope.launch {
+                homeEntrance.snapTo(0f)
+                homeEntrance.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 260f))
+            }
+        }
+    }
     LaunchedEffect(homePresses) {
         homePresses.collect {
-            closeDrawer()
+            drawer.close()
             settingsOpen = false
         }
     }
+    // Raise the keyboard only once the drawer has landed; resizing mid-flight makes it stutter.
+    LaunchedEffect(drawer) {
+        snapshotFlow { drawer.isOpen && drawer.progress > 0.97f }
+            .distinctUntilChanged()
+            .collect { landed ->
+                if (landed && wantsSearch) focusSearch = true
+            }
+    }
+    // As soon as the drawer starts to leave, the keyboard goes first; once it's gone, reset.
+    LaunchedEffect(drawer) {
+        snapshotFlow { drawer.isOpen to (drawer.progress <= 0f) }
+            .distinctUntilChanged()
+            .collect { (open, closed) ->
+                if (!open) {
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                    focusSearch = false
+                    wantsSearch = false
+                }
+                if (!open && closed) {
+                    query = ""
+                    gridState.scrollToItem(0)
+                }
+            }
+    }
     // A launcher never "goes back" anywhere; back only closes what's open.
-    BackHandler { if (drawerOpen) closeDrawer() }
+    BackHandler { if (drawer.isOpen) drawer.close() }
 
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         vm.refreshCalendar()
@@ -121,15 +172,19 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
         val options = bounds?.let {
             ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
         }
+        keyboard?.hide()
+        // On success the drawer stays put and is tidied away when the app covers us (ON_STOP).
         runCatching { vm.appRepository.launch(app, bounds, options) }
-            .onFailure { Toast.makeText(context, "Couldn't open ${app.label}", Toast.LENGTH_SHORT).show() }
-        closeDrawer()
+            .onFailure {
+                Toast.makeText(context, "Couldn't open ${app.label}", Toast.LENGTH_SHORT).show()
+                drawer.close()
+            }
     }
 
     val actions = object : HomeActions {
         override fun openDrawer(withSearch: Boolean) {
-            focusSearch = withSearch
-            drawerOpen = true
+            wantsSearch = withSearch
+            drawer.open()
         }
 
         override fun openSettings() {
@@ -179,13 +234,11 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
         override fun camera() = context.safeStart(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
     }
 
-    val drawerProgress by animateFloatAsState(
-        targetValue = if (drawerOpen) 1f else 0f,
-        animationSpec = tween(320),
-        label = "drawer",
-    )
-
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { drawer.travelPx = it.height * 0.42f },
+    ) {
         if (useSystemWallpaper) {
             // A whisper of frost so dark wallpapers still read under the glass.
             Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.18f)))
@@ -203,34 +256,49 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
                 isDefaultLauncher = isDefault,
             ),
             actions = actions,
+            drawer = drawer,
+            // Everything below reads progress inside graphicsLayer, so the whole open/close
+            // runs in the draw phase without a single recomposition.
             modifier = Modifier.graphicsLayer {
-                val p = drawerProgress
-                alpha = 1f - 0.7f * p
-                scaleX = 1f - 0.06f * p
-                scaleY = 1f - 0.06f * p
+                val p = drawer.progress.coerceIn(0f, 1f)
+                val e = homeEntrance.value
+                val scale = (1f - 0.07f * p) * (0.94f + 0.06f * e)
+                scaleX = scale
+                scaleY = scale
+                alpha = (1f - 0.75f * p) * (0.4f + 0.6f * e)
+                translationY = -24.dp.toPx() * p
+                val blur = 22.dp.toPx() * p
+                renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
             },
         )
 
-        AnimatedVisibility(
-            visible = drawerOpen,
-            enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 420f)) { it / 3 } + fadeIn(tween(220)),
-            exit = slideOutVertically(tween(260)) { it / 3 } + fadeOut(tween(200)),
-        ) {
-            AppDrawer(
-                apps = apps,
-                query = query,
-                onQueryChange = { query = it },
-                focusSearch = focusSearch,
-                onLaunch = ::launchApp,
-                onAppInfo = { runCatching { vm.appRepository.openAppInfo(it) } },
-                onUninstall = { runCatching { vm.appRepository.uninstall(it) } },
-                onWebSearch = { q ->
-                    context.safeStart(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, q))
-                    closeDrawer()
-                },
-                onClose = ::closeDrawer,
-            )
-        }
+        AppDrawer(
+            apps = apps,
+            query = query,
+            onQueryChange = { query = it },
+            focusSearch = focusSearch,
+            onLaunch = ::launchApp,
+            onAppInfo = { runCatching { vm.appRepository.openAppInfo(it) } },
+            onUninstall = { runCatching { vm.appRepository.uninstall(it) } },
+            onWebSearch = { q ->
+                keyboard?.hide()
+                context.safeStart(Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, q))
+            },
+            drawer = drawer,
+            gridState = gridState,
+            modifier = Modifier.graphicsLayer {
+                val p = drawer.progress
+                if (p <= 0.001f) {
+                    // Parked fully below the screen: invisible and untouchable, but already
+                    // composed so the first frame of a swipe has nothing to build.
+                    translationY = size.height
+                    alpha = 0f
+                } else {
+                    translationY = (1f - p.coerceAtMost(1f)) * drawer.travelPx
+                    alpha = (p * 1.8f).coerceIn(0f, 1f)
+                }
+            },
+        )
     }
 
     if (settingsOpen) {
@@ -243,7 +311,7 @@ fun LauncherRoot(homePresses: Flow<Unit>, vm: LauncherViewModel = viewModel()) {
             onPickWallpaper = {
                 context.safeStart(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Choose wallpaper"))
             },
-            onSetDefault = ::requestDefaultLauncher,
+            onSetDefault = { requestDefaultLauncher() },
             onSystemSettings = { context.safeStart(Intent(Settings.ACTION_SETTINGS)) },
             onDismiss = { settingsOpen = false },
         )

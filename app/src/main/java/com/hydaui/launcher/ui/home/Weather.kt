@@ -1,7 +1,15 @@
 package com.hydaui.launcher.ui.home
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import com.hydaui.launcher.ui.components.pressable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -40,44 +48,48 @@ fun WeatherTile(state: WeatherState, onClick: () -> Unit, modifier: Modifier = M
             Modifier
                 .align(Alignment.CenterEnd)
                 .size(118.dp)
+                .pressable(onClick = onClick)
                 .glass(RoundedCornerShape(30.dp), GlassTone.Smoke, elevation = 14.dp)
-                .clickable(onClick = onClick)
                 .padding(14.dp),
         ) {
-            when (state) {
-                is WeatherState.Ready -> Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${state.weather.temperature}°",
-                        color = Color.White,
-                        style = MaterialTheme.typography.displayLarge.copy(fontSize = 44.sp),
-                    )
-                    Text(
-                        "Feels like ${state.weather.feelsLike}°",
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
+            Crossfade(state, animationSpec = tween(420), label = "weather", modifier = Modifier.matchParentSize()) { state ->
+                Box(Modifier.matchParentSize()) {
+                    when (state) {
+                        is WeatherState.Ready -> Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
+                            Text(
+                                "${state.weather.temperature}°",
+                                color = Color.White,
+                                style = MaterialTheme.typography.displayLarge.copy(fontSize = 44.sp),
+                            )
+                            Text(
+                                "Feels like ${state.weather.feelsLike}°",
+                                color = Color.White.copy(alpha = 0.85f),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
 
-                WeatherState.Loading -> Text(
-                    "—°",
-                    color = Color.White,
-                    style = MaterialTheme.typography.displayLarge.copy(fontSize = 44.sp),
-                    modifier = Modifier.align(Alignment.TopEnd),
-                )
+                        WeatherState.Loading -> Text(
+                            "—°",
+                            color = Color.White,
+                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 44.sp),
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        )
 
-                WeatherState.NoPermission, WeatherState.Unavailable -> Column(
-                    Modifier.align(Alignment.BottomEnd),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    Icon(Icons.Rounded.MyLocation, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(
-                        if (state == WeatherState.NoPermission) "Tap for\nlocal weather" else "Weather\nunavailable",
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp,
-                        lineHeight = 14.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                    )
+                        WeatherState.NoPermission, WeatherState.Unavailable -> Column(
+                            Modifier.align(Alignment.BottomEnd),
+                            horizontalAlignment = Alignment.End,
+                        ) {
+                            Icon(Icons.Rounded.MyLocation, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Text(
+                                if (state == WeatherState.NoPermission) "Tap for\nlocal weather" else "Weather\nunavailable",
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp,
+                                lineHeight = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -85,7 +97,22 @@ fun WeatherTile(state: WeatherState, onClick: () -> Unit, modifier: Modifier = M
             is WeatherState.Ready -> state.weather.condition to state.weather.isDay
             else -> WeatherCondition.Cloudy to true
         }
-        WeatherGlyph(condition, isDay, Modifier.align(Alignment.CenterStart).size(96.dp))
+        // The sky drifts gently, as skies do.
+        val bob = rememberInfiniteTransition(label = "sky").animateFloat(
+            initialValue = -1f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(4_200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "bob",
+        )
+        Crossfade(condition to isDay, animationSpec = tween(600), label = "glyph", modifier = Modifier.align(Alignment.CenterStart)) { (c, day) ->
+            WeatherGlyph(
+                c,
+                day,
+                Modifier
+                    .size(96.dp)
+                    .graphicsLayer { translationY = bob.value * 3.dp.toPx(); translationX = bob.value * 1.5.dp.toPx() },
+            )
+        }
     }
 }
 

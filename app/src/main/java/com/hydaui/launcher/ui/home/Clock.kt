@@ -1,5 +1,7 @@
 package com.hydaui.launcher.ui.home
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,8 +15,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -26,8 +34,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hydaui.launcher.ui.components.GlassTone
 import com.hydaui.launcher.ui.components.glass
+import com.hydaui.launcher.ui.components.pressable
 import com.hydaui.launcher.ui.theme.Hyda
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -35,25 +45,46 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Wall-clock time that ticks on the second boundary. */
+/** Wall-clock time that changes on the minute — enough for everything but the second hand. */
 @Composable
-fun rememberNow(): State<Long> = produceState(System.currentTimeMillis()) {
+fun rememberMinute(): State<Long> = produceState(System.currentTimeMillis()) {
     while (true) {
+        delay(60_000 - System.currentTimeMillis() % 60_000)
         value = System.currentTimeMillis()
-        delay(1_000 - value % 1_000)
     }
 }
 
+/**
+ * The dial redraws every second but never recomposes: time lives in state read only while
+ * drawing, and the second hand springs into each new second like a quartz movement.
+ */
 @Composable
-fun AnalogClock(now: Long, modifier: Modifier = Modifier, size: Dp = 148.dp) {
-    val cal = Calendar.getInstance().apply { timeInMillis = now }
-    val hours = cal.get(Calendar.HOUR) + cal.get(Calendar.MINUTE) / 60f
-    val minutes = cal.get(Calendar.MINUTE) + cal.get(Calendar.SECOND) / 60f
-    val seconds = cal.get(Calendar.SECOND).toFloat()
-    val weekday = SimpleDateFormat("EEE", Locale.getDefault()).format(Date(now)).uppercase()
-    val day = cal.get(Calendar.DAY_OF_MONTH).toString()
+fun AnalogClock(onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 148.dp) {
+    val time = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val secondAngle = remember { Animatable(secondOf(System.currentTimeMillis()) * 6f) }
+    var dateLabel by remember { mutableStateOf(formatDate(System.currentTimeMillis())) }
 
-    Box(modifier.size(size).glass(CircleShape, GlassTone.Milk, elevation = 14.dp)) {
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000 - System.currentTimeMillis() % 1_000)
+            val now = System.currentTimeMillis()
+            time.longValue = now
+            dateLabel = formatDate(now) // Same string most ticks, so no recomposition.
+            val second = secondOf(now)
+            launch {
+                if (second == 0) {
+                    // Finish the lap at 360°, then quietly reset, so the hand never spins backwards.
+                    secondAngle.animateTo(360f, TICK)
+                    secondAngle.snapTo(0f)
+                } else {
+                    if (secondAngle.value > second * 6f) secondAngle.snapTo(0f)
+                    secondAngle.animateTo(second * 6f, TICK)
+                }
+            }
+        }
+    }
+
+    Box(modifier.size(size).pressable(onClick = onClick).glass(CircleShape, GlassTone.Milk, elevation = 14.dp)) {
         Text(
             "12",
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
@@ -64,14 +95,16 @@ fun AnalogClock(now: Long, modifier: Modifier = Modifier, size: Dp = 148.dp) {
             Modifier.align(Alignment.Center).offset(x = (-14).dp, y = 22.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(weekday, fontSize = 9.sp, color = Hyda.Ember, style = MaterialTheme.typography.labelSmall)
+            Text(dateLabel.first, fontSize = 9.sp, color = Hyda.Ember, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(4.dp))
-            Text(day, fontSize = 9.sp, color = Hyda.InkSoft, style = MaterialTheme.typography.labelSmall)
+            Text(dateLabel.second, fontSize = 9.sp, color = Hyda.InkSoft, style = MaterialTheme.typography.labelSmall)
         }
         Canvas(Modifier.fillMaxSize().padding(12.dp)) {
+            val cal = Calendar.getInstance().apply { timeInMillis = time.longValue }
+            val minutes = cal.get(Calendar.MINUTE) + cal.get(Calendar.SECOND) / 60f
+            val hours = cal.get(Calendar.HOUR) + minutes / 60f
             val r = this.size.minDimension / 2
-            for (i in 0 until 12) {
-                if (i == 0) continue // "12" is lettered
+            for (i in 1 until 12) { // "12" is lettered
                 val major = i % 3 == 0
                 val outer = r - 2.dp.toPx()
                 val inner = outer - (if (major) 5.dp else 2.5.dp).toPx()
@@ -86,11 +119,23 @@ fun AnalogClock(now: Long, modifier: Modifier = Modifier, size: Dp = 148.dp) {
             }
             hand(hours * 30f, r * 0.42f, 4.dp.toPx(), Hyda.Ink)
             hand(minutes * 6f, r * 0.68f, 3.dp.toPx(), Hyda.Ink)
-            hand(seconds * 6f, r * 0.80f, 1.2.dp.toPx(), Hyda.Ember, tail = r * 0.14f)
+            hand(secondAngle.value, r * 0.80f, 1.2.dp.toPx(), Hyda.Ember, tail = r * 0.14f)
             drawCircle(Hyda.Ink, 3.5.dp.toPx())
             drawCircle(Color.White, 1.5.dp.toPx())
         }
     }
+}
+
+private val TICK = spring<Float>(dampingRatio = 0.42f, stiffness = 900f)
+
+private fun secondOf(millis: Long): Int =
+    Calendar.getInstance().apply { timeInMillis = millis }.get(Calendar.SECOND)
+
+private fun formatDate(millis: Long): Pair<String, String> {
+    val date = Date(millis)
+    val weekday = SimpleDateFormat("EEE", Locale.getDefault()).format(date).uppercase()
+    val day = SimpleDateFormat("d", Locale.getDefault()).format(date)
+    return weekday to day
 }
 
 private fun DrawScope.hand(angleDeg: Float, length: Float, width: Float, color: Color, tail: Float = 0f) {

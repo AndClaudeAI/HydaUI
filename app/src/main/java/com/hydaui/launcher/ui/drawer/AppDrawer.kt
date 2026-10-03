@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import com.hydaui.launcher.ui.DrawerState
+import com.hydaui.launcher.ui.components.pressable
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -88,7 +92,8 @@ fun AppDrawer(
     onAppInfo: (AppEntry) -> Unit,
     onUninstall: (AppEntry) -> Unit,
     onWebSearch: (String) -> Unit,
-    onClose: () -> Unit,
+    drawer: DrawerState,
+    gridState: LazyGridState,
     modifier: Modifier = Modifier,
 ) {
     val results = remember(apps, query) {
@@ -100,27 +105,26 @@ fun AppDrawer(
                 .sortedBy { !it.label.startsWith(q, ignoreCase = true) }
         }
     }
-    val close by rememberUpdatedState(onClose)
-    val thresholdPx = with(LocalDensity.current) { 110.dp.toPx() }
-
-    // Pulling down past the top of the list dismisses the drawer.
-    val pullToClose = remember(thresholdPx) {
+    // Pulling down from the top of the list hands the finger to the drawer, which follows it
+    // down and either springs shut or back open on release.
+    val pullToClose = remember(drawer) {
         object : NestedScrollConnection {
-            var pulled = 0f
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.Drag || drawer.progress >= 1f || !drawer.isOpen) return Offset.Zero
+                drawer.dragBy(-available.y)
+                return Offset(0f, available.y)
+            }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.Drag) return Offset.Zero
-                pulled = if (available.y > 0) pulled + available.y else 0f
-                if (pulled > thresholdPx) {
-                    pulled = 0f
-                    close()
-                }
-                return Offset.Zero
+                if (source != NestedScrollSource.Drag || available.y <= 0f) return Offset.Zero
+                drawer.dragBy(-available.y)
+                return Offset(0f, available.y)
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                pulled = 0f
-                return Velocity.Zero
+                if (drawer.progress >= 1f) return Velocity.Zero
+                drawer.settle(-available.y)
+                return available
             }
         }
     }
@@ -144,13 +148,21 @@ fun AppDrawer(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        var total = 0f
+                    .pointerInput(drawer) {
+                        val tracker = VelocityTracker()
+                        var travelled = 0f
                         detectVerticalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = { if (total > thresholdPx * 0.6f) close() },
+                            onDragStart = {
+                                tracker.resetTracking()
+                                travelled = 0f
+                            },
+                            onDragEnd = { drawer.settle(-tracker.calculateVelocity().y) },
+                            onDragCancel = { drawer.settle(0f) },
                         ) { change, dy ->
-                            total += dy
+                            travelled += dy
+                            // This header moves with the drawer, so track the running total.
+                            tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                            drawer.dragBy(-dy)
                             change.consume()
                         }
                     }
@@ -192,6 +204,7 @@ fun AppDrawer(
             val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
+                state = gridState,
                 modifier = Modifier.weight(1f).nestedScroll(pullToClose),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = bottomInset + 24.dp),
             ) {
@@ -255,8 +268,8 @@ private fun WebSearchRow(query: String, onClick: () -> Unit) {
         Modifier
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .fillMaxWidth()
+            .pressable(pressedScale = 0.97f, onClick = onClick)
             .glass(RoundedCornerShape(22.dp), elevation = 2.dp)
-            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -286,14 +299,13 @@ private fun AppCell(
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .combinedClickable(
-                    onClick = { onLaunch(app, bounds) },
+                .pressable(
+                    pressedScale = 0.9f,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     },
-                )
+                ) { onLaunch(app, bounds) }
                 .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

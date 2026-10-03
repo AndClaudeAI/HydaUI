@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
+import com.hydaui.launcher.ui.components.pressable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -60,7 +63,7 @@ import java.util.Date
 
 @Composable
 fun Greeting(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick)) {
+    Column(modifier.pressable(pressedScale = 0.97f, onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Hello,", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.width(10.dp))
@@ -100,6 +103,20 @@ fun SectionHeader(title: String, trailing: String?, modifier: Modifier = Modifie
 
 @Composable
 fun TodayCard(
+    state: CalendarState,
+    now: Long,
+    onConnect: () -> Unit,
+    onOpenEvent: (CalendarEvent) -> Unit,
+    onOpenCalendar: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Crossfade(targetState = state, animationSpec = tween(380), label = "today", modifier = modifier.animateContentSize(spring(stiffness = 500f))) { s ->
+        TodayContent(s, now, onConnect, onOpenEvent, onOpenCalendar)
+    }
+}
+
+@Composable
+private fun TodayContent(
     state: CalendarState,
     now: Long,
     onConnect: () -> Unit,
@@ -147,8 +164,8 @@ private fun EventStack(
         Column(
             Modifier
                 .fillMaxWidth()
+                .pressable(pressedScale = 0.97f) { onOpen(event) }
                 .glass(RoundedCornerShape(26.dp), GlassTone.Milk, elevation = 6.dp)
-                .clickable { onOpen(event) }
                 .padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
             Text(event.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -181,7 +198,7 @@ private fun EventStack(
             ) {
                 next.forEach { e ->
                     Row(
-                        Modifier.weight(1f, fill = false).clip(RoundedCornerShape(10.dp)).clickable { onOpen(e) }.padding(4.dp),
+                        Modifier.weight(1f, fill = false).pressable { onOpen(e) }.padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(9.dp).border(2.dp, Color(e.color).copy(alpha = 1f), CircleShape))
@@ -223,9 +240,9 @@ fun PromptCard(
 fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier
+            .pressable(pressedScale = 0.93f, onClick = onClick)
             .clip(CircleShape)
             .background(Brush.verticalGradient(listOf(Color(0xFF3B8DFF), Hyda.Accent)))
-            .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 11.dp),
     ) {
         Text(text, color = Color.White, style = MaterialTheme.typography.labelLarge)
@@ -288,7 +305,7 @@ fun BatteryTile(battery: BatteryState, modifier: Modifier = Modifier, size: Dp =
 fun AlarmTile(nextAlarm: Long?, now: Long, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Column(
-        modifier.height(112.dp).glass(RoundedCornerShape(34.dp)).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp),
+        modifier.height(112.dp).pressable(onClick = onClick).glass(RoundedCornerShape(34.dp)).padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Alarm, null, tint = Hyda.Ember, modifier = Modifier.size(14.dp))
@@ -347,7 +364,8 @@ private fun WeekStrip(now: Long) {
 /** The gentle invitation to search — tap to open the drawer with the keyboard up. */
 @Composable
 fun AssistantPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val spin by rememberInfiniteTransition(label = "orb").animateFloat(
+    // Read only in graphicsLayer, so the orb turns without recomposing anything.
+    val spin = rememberInfiniteTransition(label = "orb").animateFloat(
         0f,
         360f,
         infiniteRepeatable(tween(6_000, easing = LinearEasing)),
@@ -355,12 +373,12 @@ fun AssistantPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
     )
     Row(
         modifier
+            .pressable(onClick = onClick)
             .glass(CircleShape, elevation = 8.dp)
-            .clickable(onClick = onClick)
             .padding(start = 10.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(Modifier.size(22.dp).rotate(spin)) {
+        Canvas(Modifier.size(22.dp).graphicsLayer { rotationZ = spin.value }) {
             drawCircle(Brush.sweepGradient(listOf(Hyda.Accent, Hyda.Lilac, Hyda.Ember.copy(alpha = 0.8f), Hyda.Ice, Hyda.Accent)))
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f), Color.Transparent)), radius = size.minDimension * 0.42f)
         }
@@ -372,7 +390,7 @@ fun AssistantPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun DockButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(60.dp).glass(CircleShape, elevation = 6.dp).clickable(onClick = onClick),
+        modifier.size(60.dp).pressable(pressedScale = 0.88f, onClick = onClick).glass(CircleShape, elevation = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, label, tint = Hyda.InkSoft, modifier = Modifier.size(25.dp))
