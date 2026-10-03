@@ -12,11 +12,28 @@ android {
         applicationId = "com.hydaui.launcher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Each CI run gets a higher versionCode, so a new APK always installs over the last one.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "0.1.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
+    }
+
+    signingConfigs {
+        // One fixed key checked into the repo, so every build (local or CI) can update the
+        // previous install. Android refuses an update signed with a different key, and CI
+        // runners otherwise invent a fresh debug key on every run. Fine for sideloading;
+        // use a private key kept out of git before publishing to a store.
+        create("sideload") {
+            storeFile = file("hydaui-sideload.keystore")
+            storePassword = "hydaui-sideload"
+            keyAlias = "hydaui"
+            keyPassword = "hydaui-sideload"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("sideload")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -24,9 +41,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Signed with the debug key so the release APK installs straight from CI.
-            // Swap in a real signing config before publishing to a store.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("sideload")
         }
     }
 

@@ -56,5 +56,10 @@ app/src/main/java/com/hydaui/launcher/
     └── settings/
 ```
 
-The release build is signed with the debug key so it installs straight from CI.
-Add your own signing config before you publish it anywhere.
+Every build, local or CI, is signed with the same sideload key (`app/hydaui-sideload.keystore`),
+and each CI run bumps the version code, so a new APK always installs over the previous one.
+That key is public, so use a private one before you publish anywhere.
+
+**"App not installed"?** Uninstall any HydaUI that came from an earlier build (from before the
+sideload key existed), then install again. Android also refuses to install an *older* build over
+a newer one.
