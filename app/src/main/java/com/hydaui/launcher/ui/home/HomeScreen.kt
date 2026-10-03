@@ -130,11 +130,13 @@ fun HomeScreen(state: HomeState, actions: HomeActions, drawer: DrawerState, modi
                 // Drags on the bare background and the dock: the drawer rides the finger 1:1.
                 val tracker = VelocityTracker()
                 var travelled = 0f
+                var lastSample = 0L
                 var steeringDrawer = false
                 detectVerticalDragGestures(
                     onDragStart = {
                         tracker.resetTracking()
                         travelled = 0f
+                        lastSample = 0L
                         steeringDrawer = false
                     },
                     onDragEnd = {
@@ -148,7 +150,10 @@ fun HomeScreen(state: HomeState, actions: HomeActions, drawer: DrawerState, modi
                 ) { change, dy ->
                     travelled += dy
                     // Track our own running total, not positions in this (scaling) layer.
-                    tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                    if (change.uptimeMillis > lastSample) {
+                        lastSample = change.uptimeMillis
+                        tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                    }
                     if (!steeringDrawer && (dy < 0f || drawer.progress > 0f)) steeringDrawer = true
                     if (steeringDrawer) drawer.dragBy(-dy)
                     change.consume()

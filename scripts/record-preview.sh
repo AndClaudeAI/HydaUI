@@ -45,6 +45,7 @@ read -r W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr 'x' 
 CX=$((W / 2))
 log "screen ${W}x${H}"
 
+adb logcat -c || true
 shot 01-home
 
 log "recording"
@@ -104,6 +105,8 @@ fi
 
 shot 05-home-again
 
+adb logcat -d -s HydaDrawer:D > "$OUT/drawer-log.txt" 2>/dev/null || true
+log "drawer decisions:"; cat "$OUT/drawer-log.txt" || true
 log "stopping recording"
 adb shell pkill -INT screenrecord || true
 sleep 4

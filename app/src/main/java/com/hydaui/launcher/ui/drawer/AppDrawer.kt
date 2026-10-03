@@ -151,17 +151,22 @@ fun AppDrawer(
                     .pointerInput(drawer) {
                         val tracker = VelocityTracker()
                         var travelled = 0f
+                        var lastSample = 0L
                         detectVerticalDragGestures(
                             onDragStart = {
                                 tracker.resetTracking()
                                 travelled = 0f
+                                lastSample = 0L
                             },
                             onDragEnd = { drawer.settle(-tracker.calculateVelocity().y) },
                             onDragCancel = { drawer.settle(0f) },
                         ) { change, dy ->
                             travelled += dy
                             // This header moves with the drawer, so track the running total.
-                            tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                            if (change.uptimeMillis > lastSample) {
+                                lastSample = change.uptimeMillis
+                                tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                            }
                             drawer.dragBy(-dy)
                             change.consume()
                         }

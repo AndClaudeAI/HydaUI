@@ -1,5 +1,6 @@
 package com.hydaui.launcher.ui
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
@@ -46,15 +47,26 @@ class DrawerState internal constructor(private val scope: CoroutineScope) {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { value.snapTo(target) }
     }
 
-    /** Finger lifted: commit to whichever way it was flung, else to whichever side is nearer. */
+    /**
+     * Finger lifted: commit to whichever way it was flung, else to whichever side is nearer.
+     *
+     * Near either end, position wins unless the fling against it is unmistakable. Velocity
+     * estimates go wild when a busy device delivers touches in bursts, and a drawer that's 90%
+     * open should never snap shut on a bogus reading.
+     */
     fun settle(openingVelocityPx: Float) {
-        val velocity = openingVelocityPx / travelPx
+        val p = value.value
+        val velocity = (openingVelocityPx / travelPx).coerceIn(-MAX_VELOCITY, MAX_VELOCITY)
         val open = when {
+            p >= 0.85f -> velocity > -STRONG_FLING
+            p <= 0.15f -> velocity > STRONG_FLING
             velocity > FLING -> true
             velocity < -FLING -> false
-            else -> value.value > 0.5f
+            else -> p > 0.5f
         }
-        animateTo(open, velocity)
+        Log.d("HydaDrawer", "settle progress=%.2f velocity=%.2f -> %s".format(p, velocity, if (open) "open" else "close"))
+        // Hand the spring the finger's speed only when it agrees with where we're going.
+        animateTo(open, if ((velocity > 0) == open) velocity else 0f)
     }
 
     fun open() = animateTo(true, 0f)
@@ -81,6 +93,12 @@ class DrawerState internal constructor(private val scope: CoroutineScope) {
     private companion object {
         /** Drawer-lengths per second that count as a deliberate fling. */
         const val FLING = 1.2f
+
+        /** A fling it takes to override where the drawer already nearly is. */
+        const val STRONG_FLING = 4f
+
+        /** Anything faster than this is a measuring error, not a thumb. */
+        const val MAX_VELOCITY = 12f
     }
 }
 
