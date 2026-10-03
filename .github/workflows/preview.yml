@@ -115,6 +115,7 @@ jobs:
 
       - name: Compress video
         run: |
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
           if [ -f preview/preview-raw.mp4 ]; then
             ffmpeg -loglevel error -y -i preview/preview-raw.mp4 \
               -vf "scale=540:-2,fps=30" -c:v libx264 -preset slow -crf 27 -pix_fmt yuv420p -movflags +faststart \

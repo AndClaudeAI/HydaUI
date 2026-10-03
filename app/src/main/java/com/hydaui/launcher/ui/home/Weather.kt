@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.hydaui.launcher.ui.components.pressable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,8 +53,10 @@ fun WeatherTile(state: WeatherState, onClick: () -> Unit, modifier: Modifier = M
                 .glass(RoundedCornerShape(30.dp), GlassTone.Smoke, elevation = 14.dp)
                 .padding(14.dp),
         ) {
-            Crossfade(state, animationSpec = tween(420), label = "weather", modifier = Modifier.matchParentSize()) { state ->
-                Box(Modifier.matchParentSize()) {
+            // fillMaxSize, not matchParentSize: inside Crossfade the parent is Crossfade's own box,
+            // which would size to zero and push the reading off the tile.
+            Crossfade(state, animationSpec = tween(420), label = "weather", modifier = Modifier.fillMaxSize()) { state ->
+                Box(Modifier.fillMaxSize()) {
                     when (state) {
                         is WeatherState.Ready -> Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
                             Text(

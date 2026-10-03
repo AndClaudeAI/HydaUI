@@ -92,7 +92,7 @@ fun AnalogClock(onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 1
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
         )
         Row(
-            Modifier.align(Alignment.Center).offset(x = (-14).dp, y = 22.dp),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 30.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(dateLabel.first, fontSize = 9.sp, color = Hyda.Ember, style = MaterialTheme.typography.labelSmall)
