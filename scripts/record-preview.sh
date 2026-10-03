@@ -10,7 +10,13 @@ PKG=com.hydaui.launcher
 mkdir -p "$OUT"
 
 log() { echo "[preview] $*"; }
-shot() { adb exec-out screencap -p > "$OUT/$1.png" && log "screenshot $1"; }
+alive() { [ "$(adb get-state 2>/dev/null)" = "device" ]; }
+die() { log "$*"; exit 1; }
+shot() {
+  alive || die "emulator went away before screenshot $1"
+  adb exec-out screencap -p > "$OUT/$1.png.tmp"
+  if [ -s "$OUT/$1.png.tmp" ]; then mv "$OUT/$1.png.tmp" "$OUT/$1.png"; log "screenshot $1"; else rm -f "$OUT/$1.png.tmp"; log "screenshot $1 came back empty"; fi
+}
 
 # Centre of the first on-screen element whose text or description contains $1, as "x y".
 find_text() {
@@ -29,9 +35,11 @@ adb shell wm dismiss-keyguard
 log "installing"
 adb install -r -g "$APK"
 adb shell cmd package set-home-activity "$PKG/.MainActivity"
-adb shell am start -W -n "$PKG/.MainActivity" --es demo_name "Rebecca" \
+adb shell am start -n "$PKG/.MainActivity" --es demo_name "Rebecca" \
   -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null
-sleep 8 # let first-run work (app list, aurora) settle
+sleep 10 # let first-run work (app list, aurora) settle
+alive || die "emulator went away while HydaUI was starting"
+adb logcat -d -b crash | tail -40 || true
 
 read -r W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr 'x' ' ')
 CX=$((W / 2))
@@ -102,3 +110,4 @@ sleep 4
 wait $REC 2>/dev/null || true
 adb pull /sdcard/preview.mp4 "$OUT/preview-raw.mp4" >/dev/null && log "pulled recording"
 ls -la "$OUT"
+[ -s "$OUT/01-home.png" ] || die "no usable screenshots"
