@@ -18,6 +18,13 @@ shot() {
   if [ -s "$OUT/$1.png.tmp" ]; then mv "$OUT/$1.png.tmp" "$OUT/$1.png"; log "screenshot $1"; else rm -f "$OUT/$1.png.tmp"; log "screenshot $1 came back empty"; fi
 }
 
+# A finger-like vertical drag: touch down, move in $4 steps, lift exactly where the last move
+# ended. (`input swipe` lifts at the end point after only a few moves on a busy emulator, and
+# that final jump is lost to drag handling, so swipes came out much shorter than intended.)
+drag() {
+  adb shell "input motionevent DOWN $1 $2; i=1; while [ \$i -le $4 ]; do input motionevent MOVE $1 \$(( $2 + ($3 - $2) * i / $4 )); i=\$((i+1)); done; input motionevent UP $1 $3"
+}
+
 # Centre of the first on-screen element whose text or description contains $1, as "x y".
 find_text() {
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
@@ -54,15 +61,16 @@ REC=$!
 sleep 2
 
 # 1. Slow, deliberate swipe up: the drawer should ride the finger.
-adb shell input swipe $CX $((H * 82 / 100)) $CX $((H * 35 / 100)) 1100
+drag $CX $((H * 82 / 100)) $((H * 32 / 100)) 12
 sleep 2
 shot 02-drawer
 
 # 2. Drag it back down by the handle area.
-adb shell input swipe $CX $((H * 9 / 100)) $CX $((H * 80 / 100)) 900
+drag $CX $((H * 9 / 100)) $((H * 80 / 100)) 12
 sleep 2
 
-# 3. A quick flick up, then back to close.
+# 3. A quick flick up, then back to close. (Emulator touches come too far apart to measure
+#    speed, so this exercises the position fallback rather than a true fling.)
 adb shell input swipe $CX $((H * 80 / 100)) $CX $((H * 62 / 100)) 120
 sleep 2
 adb shell input keyevent KEYCODE_BACK
